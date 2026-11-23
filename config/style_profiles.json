@@ -1,0 +1,23 @@
+{
+  "dark_fantasy_cinematic": {
+    "base": "dark fantasy cinematic concept art, epic matte painting, highly detailed, volumetric fog, dramatic chiaroscuro, film grain, muted desaturated palette with ember orange accents",
+    "aspect_ratio": "16:9",
+    "negative": "text, watermark, logo, signature, subtitles, cartoon, anime, chibi, bright saturated colors, modern objects, cars, phones, extra fingers, deformed hands, distorted face, blurry, lowres, jpeg artifacts, duplicate characters",
+    "mood_lighting": {
+      "mysterious": "cold blue moonlight through drifting mist, deep shadows",
+      "dread": "sickly green-grey light, oppressive darkness, long shadows",
+      "battle": "fiery ember light, sparks and smoke, harsh rim light",
+      "sorrow": "dim overcast light, falling ash like snow, quiet desolation",
+      "hope": "single warm golden light breaking through darkness",
+      "calm": "soft dusk light, still air, faint lantern glow"
+    },
+    "mood_camera": {
+      "mysterious": "wide establishing shot, low angle, rule of thirds",
+      "dread": "low angle looking up, tight framing, negative space above",
+      "battle": "dynamic three-quarter angle, medium-wide shot, diagonal composition",
+      "sorrow": "high angle wide shot, small figure in vast space",
+      "hope": "eye-level medium shot, centered subject, light behind",
+      "calm": "wide panoramic shot, layered depth, foreground silhouettes"
+    }
+  }
+}

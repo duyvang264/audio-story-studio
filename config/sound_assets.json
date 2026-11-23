@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "assets": {},
+  "fallback": "Deterministic original procedural audio; no external downloads or paid generation",
+  "external_asset_example_fields": ["path", "sha256", "license", "source", "attribution"]
+}

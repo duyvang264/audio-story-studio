@@ -1,0 +1,369 @@
+{
+  "name": "WF-07 Render, QC & Publishing Queue",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ass/wf07-render",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "3c72dee1-1fef-5755-8a5d-6508fbf993ac",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c1403476-841f-5ffc-a66a-269e1f0e5943",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ass-webhook-auth",
+          "name": "ASS Webhook Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate webhook input: only integers / safe run tags pass through.\nconst body = $input.first().json.body || {};\nconst episodeId = Number(body.episode_id);\nif (!Number.isInteger(episodeId) || episodeId <= 0) {\n  throw new Error('episode_id must be a positive integer');\n}\nconst run = String(body.run || 'n8n-' + Date.now());\nif (!/^[A-Za-z0-9_-]{1,40}$/.test(run)) throw new Error('invalid run tag');\nconst chatId = body.chat_id === undefined || body.chat_id === null ? null : Number(body.chat_id);\nif (chatId !== null && !Number.isInteger(chatId)) throw new Error('chat_id must be an integer');\nreturn [{ json: { episode_id: episodeId, run, chat_id: chatId } }];"
+      },
+      "id": "dbd954d3-685c-525d-911f-e437e3190fea",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/episodes/{{ $json.episode_id }}/stages/render_preview",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ run: $json.run, chat_id: $json.chat_id }) }}"
+      },
+      "id": "65439d9c-460a-56d1-bece-6d4f9306dd69",
+      "name": "Enqueue render_preview",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -80
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "590e4c84-8d21-595e-a747-cb243a68d61a",
+      "name": "Respond queued",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/notify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: '⚠️ WF-07 enqueue render_preview failed: ' + ($json.error?.message || 'unknown') }) }}"
+      },
+      "id": "f7fa0a50-3628-5833-a594-0d92439e1c20",
+      "name": "Notify failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        40
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: 'enqueue failed' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "42c2e54b-b1e3-578b-b7dd-29352842f04c",
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error?.message || 'invalid input' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "35e7b6e0-ff98-5b01-bf7c-701fdedddbcc",
+      "name": "Respond invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WF-07 Render, QC & Publishing Queue\nRenders the 720p preview (cached per-scene clips), runs QC and sends the preview with approval buttons. Final 1080p only after content approval; publishing only after publish approval (ALLOW_AUTO_PUBLISH=false → ready_manual).\n\nPOST /webhook/ass/wf07-render\nHeader: as configured in 'ASS Webhook Auth'\nBody: {\"episode_id\": 1, \"run\": \"r1\", \"chat_id\": 123}\n\nIdempotent: same episode_id+run → same job.",
+        "height": 260,
+        "width": 380
+      },
+      "id": "ac3670aa-74bf-5118-b955-3d179c3a0fa9",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ass/events",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "71c52275-01b5-525e-8c5b-950c7cc7c8bf",
+      "name": "Pipeline events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        360
+      ],
+      "webhookId": "8729df37-926a-54c5-b541-c5eeaa269dc6",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ass-webhook-auth",
+          "name": "ASS Webhook Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Worker → n8n events (N8N_EVENT_WEBHOOK_URL). Only failures are escalated.\nconst e = $input.first().json.body || {};\nif (e.event !== 'stage.failed') return [];\nreturn [{ json: { text: `❌ Episode #${e.episode_id} failed at ${e.type}: ${String(e.error || '').slice(0, 500)}` } }];"
+      },
+      "id": "06a391ff-4b6c-571e-9644-71760d666b03",
+      "name": "Failures only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/notify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}"
+      },
+      "id": "cbaf0466-ddaa-5be3-9ca8-ef4db5f34958",
+      "name": "Escalate failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        360
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "64c71cd1-1fae-58df-a110-63bfca62aef4",
+      "name": "Ack event",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        360
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate input": {
+      "main": [
+        [
+          {
+            "node": "Enqueue render_preview",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enqueue render_preview": {
+      "main": [
+        [
+          {
+            "node": "Respond queued",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify failure": {
+      "main": [
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipeline events": {
+      "main": [
+        [
+          {
+            "node": "Failures only",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ack event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failures only": {
+      "main": [
+        [
+          {
+            "node": "Escalate failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "AudioStoryWF0700",
+  "tags": []
+}

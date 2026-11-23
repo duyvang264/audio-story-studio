@@ -1,0 +1,255 @@
+{
+  "name": "WF-04 Visual Story Planning",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ass/wf04-visual-plan",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "6d0572f8-9693-571a-b0cf-cae044feb671",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "d016b6d3-6c98-5235-bcc2-c08bfdbbcc2a",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ass-webhook-auth",
+          "name": "ASS Webhook Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate webhook input: only integers / safe run tags pass through.\nconst body = $input.first().json.body || {};\nconst episodeId = Number(body.episode_id);\nif (!Number.isInteger(episodeId) || episodeId <= 0) {\n  throw new Error('episode_id must be a positive integer');\n}\nconst run = String(body.run || 'n8n-' + Date.now());\nif (!/^[A-Za-z0-9_-]{1,40}$/.test(run)) throw new Error('invalid run tag');\nconst chatId = body.chat_id === undefined || body.chat_id === null ? null : Number(body.chat_id);\nif (chatId !== null && !Number.isInteger(chatId)) throw new Error('chat_id must be an integer');\nreturn [{ json: { episode_id: episodeId, run, chat_id: chatId } }];"
+      },
+      "id": "899c6bd0-d3dd-5d0a-8ab2-b38d9c22616d",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/episodes/{{ $json.episode_id }}/stages/visual_plan",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ run: $json.run, chat_id: $json.chat_id }) }}"
+      },
+      "id": "26c2f9d3-c8e4-510e-bdfd-f761132f0852",
+      "name": "Enqueue visual_plan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -80
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "bb7aff28-022b-5b56-b806-c753357ae104",
+      "name": "Respond queued",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/notify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: '⚠️ WF-04 enqueue visual_plan failed: ' + ($json.error?.message || 'unknown') }) }}"
+      },
+      "id": "543b8dea-6576-55ea-aaf7-6c94d33944ca",
+      "name": "Notify failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        40
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: 'enqueue failed' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "6d5d2fac-9484-5165-af70-a413ed4e681f",
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error?.message || 'invalid input' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "58e6dc66-3b16-5528-9340-19ee8a0f4f29",
+      "name": "Respond invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WF-04 Visual Story Planning\nScene boundaries on audio timestamps (45–150s, target 120s), prompts, asset matching → scene_plan.json + image_generation_queue.json.\n\nPOST /webhook/ass/wf04-visual-plan\nHeader: as configured in 'ASS Webhook Auth'\nBody: {\"episode_id\": 1, \"run\": \"r1\", \"chat_id\": 123}\n\nIdempotent: same episode_id+run → same job.",
+        "height": 260,
+        "width": 380
+      },
+      "id": "ccf2e71f-b181-5fed-ae58-6816b1ff0ec5",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate input": {
+      "main": [
+        [
+          {
+            "node": "Enqueue visual_plan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enqueue visual_plan": {
+      "main": [
+        [
+          {
+            "node": "Respond queued",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify failure": {
+      "main": [
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "AudioStoryWF0400",
+  "tags": []
+}

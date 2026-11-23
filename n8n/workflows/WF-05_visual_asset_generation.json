@@ -1,0 +1,255 @@
+{
+  "name": "WF-05 Visual Asset Generation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ass/wf05-visual-generate",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "41864ac8-0b40-5f4f-ac3c-a684c6d3f607",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "1a36fecf-9a05-58ce-98a0-0ffc5b9fc47c",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ass-webhook-auth",
+          "name": "ASS Webhook Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate webhook input: only integers / safe run tags pass through.\nconst body = $input.first().json.body || {};\nconst episodeId = Number(body.episode_id);\nif (!Number.isInteger(episodeId) || episodeId <= 0) {\n  throw new Error('episode_id must be a positive integer');\n}\nconst run = String(body.run || 'n8n-' + Date.now());\nif (!/^[A-Za-z0-9_-]{1,40}$/.test(run)) throw new Error('invalid run tag');\nconst chatId = body.chat_id === undefined || body.chat_id === null ? null : Number(body.chat_id);\nif (chatId !== null && !Number.isInteger(chatId)) throw new Error('chat_id must be an integer');\nreturn [{ json: { episode_id: episodeId, run, chat_id: chatId } }];"
+      },
+      "id": "67fe992f-aaa3-521d-a8ed-94477b7eae71",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/episodes/{{ $json.episode_id }}/stages/visual_generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ run: $json.run, chat_id: $json.chat_id }) }}"
+      },
+      "id": "6e80af00-824a-564d-991f-494a6f182c5d",
+      "name": "Enqueue visual_generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -80
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "0768bb38-a25c-5c37-b70a-f8da8a845069",
+      "name": "Respond queued",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/notify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: '⚠️ WF-05 enqueue visual_generate failed: ' + ($json.error?.message || 'unknown') }) }}"
+      },
+      "id": "1395a28f-84af-5402-920f-d2c6e2700f81",
+      "name": "Notify failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        40
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: 'enqueue failed' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "30913752-929e-5574-982c-9391cea16584",
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error?.message || 'invalid input' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "f2ed6102-7437-53e1-bbb6-88f74e72ed6b",
+      "name": "Respond invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WF-05 Visual Asset Generation\nGenerates only missing images (≤ MAX_NEW_IMAGES_PER_EPISODE) with mock/codex/local provider, budget reservation per image → scene_assets_map.json.\n\nPOST /webhook/ass/wf05-visual-generate\nHeader: as configured in 'ASS Webhook Auth'\nBody: {\"episode_id\": 1, \"run\": \"r1\", \"chat_id\": 123}\n\nIdempotent: same episode_id+run → same job.",
+        "height": 260,
+        "width": 380
+      },
+      "id": "a7e7b768-f95a-5ba0-923d-09c50b167b17",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate input": {
+      "main": [
+        [
+          {
+            "node": "Enqueue visual_generate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enqueue visual_generate": {
+      "main": [
+        [
+          {
+            "node": "Respond queued",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify failure": {
+      "main": [
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "AudioStoryWF0500",
+  "tags": []
+}

@@ -1,0 +1,305 @@
+{
+  "name": "WF-01 Story Intake & Rights Approval",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ass/wf01-intake",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a017018c-58a6-54ba-b8bd-3dc86b3bd82c",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "ca75d20a-04d1-5d46-9d54-d06dfd5b6aa3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ass-webhook-auth",
+          "name": "ASS Webhook Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst path = String(body.path || '');\nif (!/^[\\w\\/.\\- ]{1,300}\\.(md|txt)$/.test(path) || path.includes('..')) throw new Error('invalid story path');\nreturn [{ json: { path } }];"
+      },
+      "id": "9962cea2-9174-575c-aa04-d48db4020ba3",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/stories/import",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: $json.path }) }}"
+      },
+      "id": "a86d6e6f-3746-541f-b587-125a12a9ddd3",
+      "name": "Import story",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -80
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "431ceb5a-6452-5a5f-bf18-2bfa3f0065dd",
+              "leftValue": "={{ $json.rights_status }}",
+              "rightValue": "approved",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3756aa77-d938-5ca4-9f48-29b63e9ce8ed",
+      "name": "Rights pending?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/notify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: '📚 Truyện #' + $json.story_id + ' cần xác nhận bản quyền: /approve rights ' + $json.story_id }) }}"
+      },
+      "id": "0ab21c0f-40d3-5481-a5af-c0789be88c9e",
+      "name": "Ask rights approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        -160
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Import story').item.json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "d08ef4ce-1288-571a-80e4-96595098fa7a",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error?.message || 'invalid input' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "2249d564-17b1-54d2-a349-493051256006",
+      "name": "Respond invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: 'import failed' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "7cef03c9-18cc-524a-ad5c-a0c6b726070d",
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WF-01 Story Intake & Rights Approval\nImports a story file already placed under storage/stories or samples/. Rights start 'pending'; the approval gate is /approve rights <id> in Telegram (or POST /api/approvals/{id}/decision).",
+        "height": 220,
+        "width": 420
+      },
+      "id": "958a4b0a-23d3-595b-bca8-782d6eeac314",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate input": {
+      "main": [
+        [
+          {
+            "node": "Import story",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Import story": {
+      "main": [
+        [
+          {
+            "node": "Rights pending?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rights pending?": {
+      "main": [
+        [
+          {
+            "node": "Ask rights approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask rights approval": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "AudioStoryWF0100",
+  "tags": []
+}

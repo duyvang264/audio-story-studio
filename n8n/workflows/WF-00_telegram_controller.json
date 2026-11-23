@@ -1,0 +1,152 @@
+{
+  "name": "WF-00 Telegram Controller",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "0a341dac-dd37-5b3b-918b-cb246fe1ac2a",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "d1b82dd9-f13a-5fc2-a3b0-449eaaf893ad",
+      "credentials": {
+        "telegramApi": {
+          "id": "ass-telegram",
+          "name": "Audio Story Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Allowlist: only configured Telegram user IDs may control the studio.\nconst allowed = String($env.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean);\nconst u = $input.first().json;\nconst from = (u.message && u.message.from) || (u.callback_query && u.callback_query.from) || {};\nif (!allowed.includes(String(from.id))) {\n  return [];  // silently drop unauthorised users (the worker API re-checks as well)\n}\nreturn [{ json: u }];"
+      },
+      "id": "2d343e91-1ed9-57e6-a4f3-714157e2b1c1",
+      "name": "Allowlist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/telegram/update",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "75bc136b-b3db-5b55-b20b-292201eddd71",
+      "name": "Forward to worker API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "console.error('worker API unreachable', JSON.stringify($input.all().map(i => i.json)));\nreturn $input.all();"
+      },
+      "id": "7119153c-c480-523d-a1bf-fd6e7bd0bbaf",
+      "name": "Log error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WF-00 Telegram Controller\nTelegram Trigger (HTTPS webhook) → allowlist → worker API.\nThe API parses commands (/start /newstory /create_episode /status /preview /approve /regen_scene /budget /cancel /publish) and inline buttons, enqueues jobs and replies.\nNever runs shell. Needs WEBHOOK_URL=https://… for n8n.",
+        "height": 260,
+        "width": 420
+      },
+      "id": "c21cac10-d215-5dd8-b346-a7e9fac093f5",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Allowlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Allowlist": {
+      "main": [
+        [
+          {
+            "node": "Forward to worker API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forward to worker API": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Log error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "AudioStoryWF0000",
+  "tags": []
+}

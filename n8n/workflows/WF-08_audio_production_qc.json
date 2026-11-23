@@ -1,0 +1,255 @@
+{
+  "name": "WF-08 Horror Audio Production & QC",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ass/wf08-audio",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d7c45707-556d-5c55-8d41-999e335edc2d",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7d53df9d-cc81-5ec6-8025-c6d14e9e51c4",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ass-webhook-auth",
+          "name": "ASS Webhook Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate webhook input: only integers / safe run tags pass through.\nconst body = $input.first().json.body || {};\nconst episodeId = Number(body.episode_id);\nif (!Number.isInteger(episodeId) || episodeId <= 0) {\n  throw new Error('episode_id must be a positive integer');\n}\nconst run = String(body.run || 'n8n-' + Date.now());\nif (!/^[A-Za-z0-9_-]{1,40}$/.test(run)) throw new Error('invalid run tag');\nconst chatId = body.chat_id === undefined || body.chat_id === null ? null : Number(body.chat_id);\nif (chatId !== null && !Number.isInteger(chatId)) throw new Error('chat_id must be an integer');\nreturn [{ json: { episode_id: episodeId, run, chat_id: chatId } }];"
+      },
+      "id": "056779c1-68e8-57a7-a870-a1e67d4ba895",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/episodes/{{ $json.episode_id }}/stages/tts_qc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ run: $json.run, chat_id: $json.chat_id }) }}"
+      },
+      "id": "642f4477-3a8d-5efc-802e-bc8bc3bce09f",
+      "name": "Enqueue tts_qc",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -80
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "f8a4e8bc-d9ed-5ea7-95d6-9733f2e4becb",
+      "name": "Respond queued",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/notify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: '⚠️ WF-08 enqueue tts_qc failed: ' + ($json.error?.message || 'unknown') }) }}"
+      },
+      "id": "7b92bf93-c40d-5844-98ba-8c968cb48c0e",
+      "name": "Notify failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        40
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: 'enqueue failed' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "19954384-6213-5077-a233-4c9aeaab16bf",
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error?.message || 'invalid input' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "99219a39-6f49-5548-a216-450b4f048604",
+      "name": "Respond invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WF-08 Horror Audio Production & QC\nAnalyze existing real TTS → safe repair (max 2 attempts) → licensed/procedural sound assets → sound cues → 5-stem ducked mix → 2-pass master → master QC → existing visual/render chain. FAIL blocks publication. Uncertain defects export review clips and require file-bound human review. No paid generation. Existing stage URLs and job contracts remain valid.\n\nPOST /webhook/ass/wf08-audio\nHeader: as configured in 'ASS Webhook Auth'\nBody: {\"episode_id\": 1, \"run\": \"r1\", \"chat_id\": 123}\n\nIdempotent: same episode_id+run → same job.",
+        "height": 260,
+        "width": 380
+      },
+      "id": "06b44841-938d-53af-8224-e1a2d6bca054",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate input": {
+      "main": [
+        [
+          {
+            "node": "Enqueue tts_qc",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enqueue tts_qc": {
+      "main": [
+        [
+          {
+            "node": "Respond queued",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify failure": {
+      "main": [
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "AudioStoryWF0800",
+  "tags": []
+}

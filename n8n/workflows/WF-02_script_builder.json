@@ -1,0 +1,255 @@
+{
+  "name": "WF-02 Script Builder",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ass/wf02-script",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "4994f128-a247-55f6-9b4b-ba5c01291e1f",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "4df741d1-f011-500d-a6cf-0ec2597791f2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ass-webhook-auth",
+          "name": "ASS Webhook Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate webhook input: only integers / safe run tags pass through.\nconst body = $input.first().json.body || {};\nconst episodeId = Number(body.episode_id);\nif (!Number.isInteger(episodeId) || episodeId <= 0) {\n  throw new Error('episode_id must be a positive integer');\n}\nconst run = String(body.run || 'n8n-' + Date.now());\nif (!/^[A-Za-z0-9_-]{1,40}$/.test(run)) throw new Error('invalid run tag');\nconst chatId = body.chat_id === undefined || body.chat_id === null ? null : Number(body.chat_id);\nif (chatId !== null && !Number.isInteger(chatId)) throw new Error('chat_id must be an integer');\nreturn [{ json: { episode_id: episodeId, run, chat_id: chatId } }];"
+      },
+      "id": "5a8a16d6-2a66-538a-93b7-17e11ed412f2",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/episodes/{{ $json.episode_id }}/stages/script_build",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ run: $json.run, chat_id: $json.chat_id }) }}"
+      },
+      "id": "ec028c44-06c6-58e9-9b11-292109572382",
+      "name": "Enqueue script_build",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -80
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "97cc0858-16c5-5cd0-89e7-791c748db1e6",
+      "name": "Respond queued",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASS_API_URL }}/api/notify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ASS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: '⚠️ WF-02 enqueue script_build failed: ' + ($json.error?.message || 'unknown') }) }}"
+      },
+      "id": "408f2abc-5b80-5cef-8b7e-d3934d22d0fe",
+      "name": "Notify failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        40
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: 'enqueue failed' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "59b88ecd-6e70-5d76-a441-a66727d53dc6",
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error?.message || 'invalid input' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "aa21a3db-762f-55d5-af67-acee003c172c",
+      "name": "Respond invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WF-02 Script Builder\nNormalises narration, splits sections/paragraphs/sentences, tags characters and locations → episode_script.json. AUTO_CHAIN continues through story validation, TTS and mandatory audio QC.\n\nPOST /webhook/ass/wf02-script\nHeader: as configured in 'ASS Webhook Auth'\nBody: {\"episode_id\": 1, \"run\": \"r1\", \"chat_id\": 123}\n\nIdempotent: same episode_id+run → same job.",
+        "height": 260,
+        "width": 380
+      },
+      "id": "7ca29222-c8a7-59d9-84b0-d29b1ddc0b76",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate input": {
+      "main": [
+        [
+          {
+            "node": "Enqueue script_build",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enqueue script_build": {
+      "main": [
+        [
+          {
+            "node": "Respond queued",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify failure": {
+      "main": [
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "AudioStoryWF0200",
+  "tags": []
+}

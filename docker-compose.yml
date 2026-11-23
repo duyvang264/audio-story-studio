@@ -1,0 +1,29 @@
+# n8n orchestrator. The Python worker + API run natively on macOS (they need `say`, ffmpeg, codex).
+# Start: docker compose --env-file .env up -d
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-2.48.7}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"          # editor bound to localhost only; never expose publicly
+    environment:
+      - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
+      - TZ=Asia/Ho_Chi_Minh
+      - N8N_HOST=localhost
+      - N8N_PROTOCOL=http
+      # Public HTTPS URL of a tunnel that forwards ONLY /webhook/* to this container (needed by Telegram Trigger)
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-}
+      - N8N_SECURE_COOKIE=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
+      - N8N_RUNNERS_ENABLED=true
+      # Workflows read ASS_API_URL / ASS_API_KEY / TELEGRAM_ALLOWED_USER_IDS from env
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - ASS_API_URL=http://host.docker.internal:${API_PORT:-8765}
+      - ASS_API_KEY=${API_KEY}
+      - TELEGRAM_ALLOWED_USER_IDS=${TELEGRAM_ALLOWED_USER_IDS}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
