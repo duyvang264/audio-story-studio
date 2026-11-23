@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff>=0.8"]
 # Offline VieNeu TTS. Installed in the separate venv storage/tools/vieneu/venv,
 # which runs studio/tts/vieneu_worker.py (TTS_PROVIDER=vieneu).
 vieneu = ["vieneu>=3.8", "soundfile>=0.13"]
@@ -30,6 +30,18 @@ markers = [
     "db: needs a local PostgreSQL test database",
     "media: needs ffmpeg/ffprobe",
     "slow: end-to-end style tests",
+]
+
+[tool.ruff]
+line-length = 140
+extend-exclude = ["scripts/oneoff", "storage", "build"]
+
+[tool.ruff.lint]
+# Bug-finding rules only for now (pyflakes, syntax errors, bugbear); style rules can be added later.
+select = ["F", "E9", "B"]
+ignore = [
+    "B904",  # raise HTTPException inside except without `from` — intentional in API handlers
+    "B905",  # zip() without strict= — adding strict would change runtime behaviour
 ]
 
 [build-system]

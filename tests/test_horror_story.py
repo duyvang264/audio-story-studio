@@ -2,7 +2,7 @@ import json
 import httpx
 import pytest
 from studio.horror_story import StorySettings,schedule,validate,generate
-from studio.tts.text import spoken_text,number
+from studio.tts.text import spoken_text
 from studio.visual.scene_planner import accelerate_scenes
 from studio.jobs import next_stage
 

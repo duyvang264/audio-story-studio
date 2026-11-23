@@ -127,7 +127,7 @@ def test_error_messages_do_not_expose_response(cfg, status):
 def test_unsupported_file_and_download_denied(cfg):
     for meta in [{'name': 'scan.pdf', 'mimeType': 'application/pdf', 'capabilities': {'canDownload': True}},
                  {'name': 'doc', 'mimeType': drive.DOC, 'capabilities': {'canDownload': False}}]:
-        with httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=meta))) as client:
+        with httpx.Client(transport=httpx.MockTransport(lambda r, meta=meta: httpx.Response(200, json=meta))) as client:
             with pytest.raises(drive.DriveError):
                 drive.fetch_story(FID, cfg, client)
 

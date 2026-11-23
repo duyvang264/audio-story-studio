@@ -45,7 +45,7 @@ script_build → story_validate → scene_sound_analysis → tts → tts_qc → 
 /regen_scene: visual_generate(regen) → timeline → render_preview(cache) → qc_preview → notify_preview
 ```
 
-Job ngoài chuỗi: `drive_import`, `story_generate` (bản nháp từ model local, vẫn cần duyệt rights/content), `publish_upload`. (`rerender_scene` có trong `ALL_JOB_TYPES` nhưng chưa có handler — `/regen_scene` đi qua `visual_generate`.) Danh sách stage gốc nằm ở `studio/jobs.py` (`STAGES`, `POST_APPROVAL_STAGES`), handler ở `studio/pipeline.py` (`HANDLERS`).
+Job ngoài chuỗi: `drive_import`, `story_generate` (bản nháp từ model local, vẫn cần duyệt rights/content), `publish_upload`. `/regen_scene` đi qua `visual_generate` (regen). Mọi job type phải có handler (có test kiểm tra). Danh sách stage gốc nằm ở `studio/jobs.py` (`STAGES`, `POST_APPROVAL_STAGES`), handler ở `studio/pipeline.py` (`HANDLERS`).
 
 - Idempotency key: `<stage>:<episode_id>:<run>`. Gọi lại cùng key trả về job cũ.
 - Retry: `max_attempts=3`, backoff 15 s · 30 s · 60 s. QC fail không retry (lỗi nội dung).

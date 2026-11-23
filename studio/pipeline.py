@@ -14,7 +14,7 @@ from .db import connect, jsonb, log_event
 from .telegram import TelegramClient
 from .visual import engine
 from .audio_engine import production as audio_production
-from .audio_engine.gate import AudioQCError, ListeningReviewRequired
+from .audio_engine.gate import AudioQCError
 from .audio_engine.io import dump as dump_json
 from .horror_story import validate as validate_horror_story
 

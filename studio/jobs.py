@@ -27,7 +27,7 @@ STAGES = [
     "notify_preview",    # WF-07 -> waits for content approval
 ]
 POST_APPROVAL_STAGES = ["render_final", "qc_final", "render_tiktok", "qc_tiktok", "publish_queue"]
-ALL_JOB_TYPES = set(STAGES) | set(POST_APPROVAL_STAGES) | {"rerender_scene", "publish_upload", "drive_import", "story_generate"}
+ALL_JOB_TYPES = set(STAGES) | set(POST_APPROVAL_STAGES) | {"publish_upload", "drive_import", "story_generate"}
 
 STAGE_TIMEOUTS = {
     "tts": 3600, "visual_generate": 3600, "render_preview": 7200, "render_final": 14400, "render_tiktok": 3600, "publish_upload": 7200,

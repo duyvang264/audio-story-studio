@@ -129,3 +129,7 @@ def test_committed_workflows_match_generator(tmp_path, monkeypatch):
     for name in committed:
         assert json.loads((tmp_path / name).read_text()) == json.loads((ROOT / "n8n" / "workflows" / name).read_text()), \
             f"{name} is stale: run scripts/gen_n8n_workflows.py"
+
+
+def test_every_job_type_has_a_handler():
+    assert jobs.ALL_JOB_TYPES - set(pipeline.HANDLERS) == set()

@@ -11,6 +11,9 @@ FONT_CANDIDATES = [
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
     "/Library/Fonts/Arial Unicode.ttf",
+    # Linux (CI / other machines): DejaVu covers Vietnamese diacritics
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
 ]
 BAND_RATIO = 0.22      # strip height relative to frame height
 FONT_RATIO = 0.046     # font size relative to frame height

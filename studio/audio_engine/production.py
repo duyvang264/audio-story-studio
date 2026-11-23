@@ -1,8 +1,6 @@
 """File-based stages shared by the worker and offline CLI; keeps existing episode contracts."""
-from dataclasses import replace
 from pathlib import Path
 import json
-from .. import media
 from ..config import Settings,PROJECT_ROOT
 from ..horror_story import validate as validate_story
 from ..visual.scene_planner import plan_scenes,SceneRules
@@ -12,8 +10,8 @@ from .mastering import master
 from .mixing import mix
 from .assets import Catalog
 from .soundscape import plan as sound_plan
-from .io import dump,decode,write,identity,digest,stable_hash
-from .gate import AudioQCError,ListeningReviewRequired,dependency,assert_report
+from .io import dump,decode,write,identity,stable_hash
+from .gate import AudioQCError,dependency,assert_report
 
 
 def _read(path):return json.loads(Path(path).read_text())

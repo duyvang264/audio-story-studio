@@ -83,7 +83,6 @@ def cmd_episode(args):
 
 
 def cmd_story(args):
-    import yaml
     from ..config import get_settings
     from ..horror_story import generate,schedule
     cfg=get_settings().story_engine;brief=json.loads(Path(args.brief).read_text())

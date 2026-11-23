@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from studio.audio_engine.settings import AudioSettings
 from studio.audio_engine.io import write,digest,decode
-from studio.audio_engine.analyzer import analyze,Context,flag,write_reports
+from studio.audio_engine.analyzer import analyze,Context,flag
 from studio.audio_engine.repair import repair
 from studio.audio_engine.gate import assert_report,record_review,AudioQCError,ListeningReviewRequired,dependency
 from studio.audio_engine.assets import Catalog,procedural

@@ -1,8 +1,5 @@
 """Narration-timed tension and sound cues; deliberate silence never deletes spoken words."""
-from pathlib import Path
-import re
 from pydantic import BaseModel,Field,model_validator
-from .io import dump,stable_hash
 
 
 class SoundCue(BaseModel):
