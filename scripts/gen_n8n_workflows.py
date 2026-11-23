@@ -206,20 +206,19 @@ def wf07():
                           "Renders the 720p preview (cached per-scene clips), runs QC and sends the preview "
                           "with approval buttons. Final 1080p only after content approval; publishing only "
                           "after publish approval (ALLOW_AUTO_PUBLISH=false → ready_manual).")
-    events_js = """// Worker → n8n events (N8N_EVENT_WEBHOOK_URL). Only failures are escalated.
-const e = $input.first().json.body || {};
-if (e.event !== 'stage.failed') return [];
-return [{ json: { text: `❌ Episode #${e.episode_id} failed at ${e.type}: ${String(e.error || '').slice(0, 500)}` } }];"""
+    # Worker → n8n events (N8N_EVENT_WEBHOOK_URL): only final `stage.failed`. The worker already notifies
+    # Telegram itself, so this hook only acknowledges; attach custom handling (logging, alerts) after it.
     base["nodes"] += [
         webhook(wf + "-events", "ass/events", (0, 360)) | {"name": "Pipeline events",
                                                            "id": nid(wf, "Pipeline events")},
-        node(wf, "Failures only", "n8n-nodes-base.code", 2, {"jsCode": events_js}, [240, 360]),
-        notify(wf, "Escalate failure", "$json.text", [480, 360]),
-        respond(wf, "Ack event", (720, 360), 200, "={{ JSON.stringify({ ok: true }) }}"),
+        respond(wf, "Ack event", (240, 360), 200, "={{ JSON.stringify({ ok: true }) }}"),
+        node(wf, "About events", "n8n-nodes-base.stickyNote", 1,
+             {"content": "## Pipeline events\nWorker POSTs only final `stage.failed` "
+                         "{event, job_id, type, episode_id, error}.\nTelegram is already notified by the "
+                         "worker — do NOT notify again here (duplicates).", "height": 180, "width": 380},
+             [0, 520]),
     ]
-    base["connections"].update(conn(("Pipeline events", 0, "Failures only"), ("Pipeline events", 0, "Ack event"),
-                                    ("Failures only", 0, "Escalate failure")))
-    # 'Respond to Webhook' must answer each webhook once; events respond immediately in parallel.
+    base["connections"].update(conn(("Pipeline events", 0, "Ack event")))
     return base
 
 

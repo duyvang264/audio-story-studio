@@ -160,7 +160,7 @@ Chỉ cần nếu bạn muốn chỉnh workflow bằng kéo-thả. **Không ch�
    cd ~/dev/projects/audio-story-studio
    scripts/services.sh install --with-api          # Worker API 127.0.0.1:8765 cho n8n
    docker compose --env-file .env up -d
-   scripts/n8n_import.sh                           # import 8 workflow WF-00…WF-07
+   scripts/n8n_import.sh                           # import 9 workflow WF-00…WF-08
    ```
 2. Mở http://localhost:5678 (chỉ trên Mac mini), tạo tài khoản owner.
 3. Vào **Credentials**:

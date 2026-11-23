@@ -20,7 +20,7 @@ from .horror_story import validate as validate_horror_story
 
 
 class ApprovalError(RuntimeError):
-    pass
+    retryable = False  # a missing human decision does not fix itself on retry
 
 
 # ------------------------------------------------------------------ helpers
@@ -138,14 +138,27 @@ def _decide_locked(approval_id: int, approve: bool, user_id: int | None, *, chat
     return {"approval": ap, "changed": True}
 
 
+def assert_rights_approved(episode_id: int, conn) -> dict:
+    """Raise unless the episode exists and its story's rights were approved by a human."""
+    ep = conn.execute("SELECT e.*, s.rights_status FROM episodes e JOIN stories s ON s.id=e.story_id WHERE e.id=%s",
+                      (episode_id,)).fetchone()
+    if ep is None:
+        raise ValueError(f"episode {episode_id} not found")
+    if ep["rights_status"] != "approved":
+        raise ApprovalError("story rights not approved")
+    return ep
+
+
+def content_approved(episode_id: int, conn) -> bool:
+    """True only if the most recent content approval of the episode was approved (a newer preview reopens it)."""
+    row = conn.execute("""SELECT status FROM approvals WHERE kind='content' AND episode_id=%s
+                          ORDER BY id DESC LIMIT 1""", (episode_id,)).fetchone()
+    return bool(row) and row["status"] == "approved"
+
+
 def start_episode_pipeline(episode_id: int, chat_id=None, run: str = "r1") -> dict:
     with connect() as c:
-        ep = c.execute("SELECT e.*, s.rights_status FROM episodes e JOIN stories s ON s.id=e.story_id WHERE e.id=%s",
-                       (episode_id,)).fetchone()
-        if ep is None:
-            raise ValueError(f"episode {episode_id} not found")
-        if ep["rights_status"] != "approved":
-            raise ApprovalError("story rights not approved")
+        assert_rights_approved(episode_id, c)
         job = jobs.enqueue("script_build", episode_id, payload={"chat_id": chat_id, "run": run},
                            idempotency_key=f"script_build:{episode_id}:{run}", conn=c)
         c.execute("UPDATE episodes SET status='queued', current_stage='script_build', updated_at=now() WHERE id=%s",
@@ -298,6 +311,9 @@ def h_notify_preview(job, s):
 
 def h_render_final(job, s):
     ep = job["episode_id"]
+    with connect() as c:
+        if not content_approved(ep, c):
+            raise ApprovalError(f"episode {ep} has no approved content review; final render needs /approve")
     set_stage(ep, "render_final", "rendering_final")
     out = _final_path(s, ep)
     res = render.render_episode(ep, height=s.final_height, out_path=out, crf=20, settings=s)
@@ -529,7 +545,6 @@ def run_job(job: dict, s: Settings | None = None) -> dict:
 
 
 def after_success(job: dict, s: Settings) -> None:
-    emit_event("stage.completed", job, s)
     if job["type"] in ("drive_import", "story_generate"):
         with connect() as c:
             row = c.execute("SELECT result FROM jobs WHERE id=%s", (job["id"],)).fetchone()
@@ -548,7 +563,9 @@ OPTIONAL_STAGES = ("render_tiktok", "qc_tiktok")
 
 
 def after_failure(job: dict, error: str, final: bool, s: Settings) -> None:
-    emit_event("stage.failed" if final else "stage.retry", job, s, {"error": error[-500:]})
+    # Only final failures go to n8n; Telegram is notified below by the worker itself, not by n8n.
+    if final:
+        emit_event("stage.failed", job, s, {"error": error[-500:]})
     if final and job["type"] == "drive_import":
         notify(job, f"❌ Không nhập được tài liệu Drive (job #{job['id']}):\n{error[-500:]}\nXem /stories hoặc gửi lại /drive <link>.", s)
         return

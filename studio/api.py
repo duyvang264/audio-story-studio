@@ -66,6 +66,15 @@ class StageRequest(BaseModel):
 def enqueue_stage(episode_id: int, stage: str, body: StageRequest):
     if stage not in jobs.ALL_JOB_TYPES:
         raise HTTPException(400, f"unknown stage {stage}")
+    if stage not in jobs.STAGES:  # final render / publishing only start from a human approval
+        raise HTTPException(403, f"stage {stage} can only be started by an approval")
+    with connect() as c:
+        try:
+            pipeline.assert_rights_approved(episode_id, c)
+        except ValueError as e:
+            raise HTTPException(404, str(e))
+        except pipeline.ApprovalError as e:
+            raise HTTPException(409, str(e))
     if any(n <= 0 for n in body.regenerate_chunks):
         raise HTTPException(400, 'regenerate_chunks must contain positive generation-plan chunk numbers')
     job = jobs.enqueue(stage, episode_id, payload={"chat_id": body.chat_id, "run": body.run, "regenerate_chunks": body.regenerate_chunks},

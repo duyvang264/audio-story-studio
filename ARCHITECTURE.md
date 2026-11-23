@@ -51,7 +51,8 @@ Job ngoài chuỗi: `drive_import`, `story_generate` (bản nháp từ model loc
 - Retry: `max_attempts=3`, backoff 15 s · 30 s · 60 s. QC fail không retry (lỗi nội dung).
 - Lock hết hạn (`timeout_sec` theo stage) → tự động requeue.
 - `job_events` lưu log theo episode; `/status` hiển thị 5 sự kiện gần nhất.
-- Sự kiện `stage.completed/failed` gửi tới `N8N_EVENT_WEBHOOK_URL` (WF-07 → báo lỗi về Telegram).
+- Chỉ sự kiện `stage.failed` (lỗi cuối cùng, hết retry) được gửi tới `N8N_EVENT_WEBHOOK_URL`. Worker tự báo lỗi về Telegram; WF-07 chỉ ack event, không báo lại (tránh tin nhắn trùng).
+- `POST /api/episodes/{id}/stages/{stage}` (dùng bởi WF-02…08) chỉ nhận các stage **trước** duyệt content (`jobs.STAGES`), và từ chối nếu truyện chưa duyệt rights (409). `render_final` / `publish_*` chỉ được tạo bởi approval; `h_render_final` còn tự kiểm tra lần duyệt content gần nhất là `approved`.
 
 ## Approval gates
 

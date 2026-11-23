@@ -1,6 +1,6 @@
 #!/bin/zsh
-# Import (or re-import) the 8 workflows into the n8n container started by docker-compose.
-# Workflow IDs are stable (AudioStoryWF0000…0700), so re-importing updates them in place.
+# Import (or re-import) the 9 workflows into the n8n container started by docker-compose.
+# Workflow IDs are stable (AudioStoryWF0000…0800), so re-importing updates them in place.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 docker compose exec -T n8n n8n import:workflow --separate --input=/workflows

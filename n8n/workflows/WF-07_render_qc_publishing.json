@@ -197,52 +197,6 @@
     },
     {
       "parameters": {
-        "jsCode": "// Worker → n8n events (N8N_EVENT_WEBHOOK_URL). Only failures are escalated.\nconst e = $input.first().json.body || {};\nif (e.event !== 'stage.failed') return [];\nreturn [{ json: { text: `❌ Episode #${e.episode_id} failed at ${e.type}: ${String(e.error || '').slice(0, 500)}` } }];"
-      },
-      "id": "06a391ff-4b6c-571e-9644-71760d666b03",
-      "name": "Failures only",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        240,
-        360
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.ASS_API_URL }}/api/notify",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $env.ASS_API_KEY }}"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 30000
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}"
-      },
-      "id": "cbaf0466-ddaa-5be3-9ca8-ef4db5f34958",
-      "name": "Escalate failure",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        480,
-        360
-      ],
-      "onError": "continueErrorOutput",
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 3000
-    },
-    {
-      "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify({ ok: true }) }}",
         "options": {
@@ -254,8 +208,23 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        720,
+        240,
         360
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Pipeline events\nWorker POSTs only final `stage.failed` {event, job_id, type, episode_id, error}.\nTelegram is already notified by the worker — do NOT notify again here (duplicates).",
+        "height": 180,
+        "width": 380
+      },
+      "id": "da272025-dd4e-509b-9f67-2f0a9e09c739",
+      "name": "About events",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        520
       ]
     }
   ],
@@ -329,23 +298,7 @@
       "main": [
         [
           {
-            "node": "Failures only",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Ack event",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Failures only": {
-      "main": [
-        [
-          {
-            "node": "Escalate failure",
             "type": "main",
             "index": 0
           }
