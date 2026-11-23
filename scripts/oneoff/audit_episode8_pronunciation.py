@@ -1,7 +1,7 @@
 """Free local ASR comparison; flags possible errors, never treats ASR as ground truth."""
 from pathlib import Path
 import json,os,re,difflib,time
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 os.environ.update({'HF_HOME':str(ROOT/'storage/models/whisper-cache'),'HF_HUB_DISABLE_XET':'1','HF_HUB_DISABLE_TELEMETRY':'1','XDG_CACHE_HOME':str(ROOT/'storage/tools/vieneu/cache')})
 from faster_whisper import WhisperModel
 import soundfile as sf

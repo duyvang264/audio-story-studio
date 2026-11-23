@@ -6,7 +6,7 @@ Cập nhật: 2026-11-22
 
 | Kiểm thử | Lệnh | Kết quả |
 |---|---|---|
-| Unit + DB + media + API + integration | `.venv/bin/python -m pytest -q` | **64 passed** |
+| Unit + DB + media + API + integration + audio engine | `.venv/bin/python -m pytest -q` | **138 passed** (2026-11-23) |
 | Smoke với Piper + burn-in + BGM + TikTok 9:16 | `TTS_PROVIDER=piper … smoke --fresh` | **SMOKE PASSED** (TikTok 82,6 s = cảnh chiến đấu, 1080×1920, −14,4 LUFS, QC đạt) |
 | Smoke với Piper TTS + phụ đề burn-in + BGM | `TTS_PROVIDER=piper … smoke --fresh` | **SMOKE PASSED** (pipeline 28 s, narration 5,3 phút, −16,1 LUFS, regen 1/4 clip) |
 | Smoke end-to-end (truyện mẫu, TTS `say` Linh, ảnh mock) | `.venv/bin/python -m studio.cli smoke --fresh` | **SMOKE PASSED** |

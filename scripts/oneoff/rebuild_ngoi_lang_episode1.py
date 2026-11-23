@@ -20,7 +20,7 @@ if '--worker' not in sys.argv:
     from studio.story import split_sentences
     from studio.tts.text import spoken_text
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'storage/production/ngoi-lang-khong-co-nguoi-chet/v4.1-production-draft-1-34a2134fa1fa/tap-01/narration.txt'
 VERSION = 'v41-rebuild-1'
 CAST = {'narrator': 'Thiện Minh', 'minh': 'Thiện Minh', 'grandmother': 'Ngọc Linh',

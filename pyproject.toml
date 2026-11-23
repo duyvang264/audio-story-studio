@@ -18,6 +18,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# Offline VieNeu TTS. Installed in the separate venv storage/tools/vieneu/venv,
+# which runs studio/tts/vieneu_worker.py (TTS_PROVIDER=vieneu).
+vieneu = ["vieneu>=3.8", "soundfile>=0.13"]
+# Pronunciation audits in scripts/oneoff (ASR + resampling).
+audit = ["faster-whisper>=1.2", "soundfile>=0.13", "soxr>=1.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -31,5 +36,5 @@ markers = [
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["studio", "studio.tts", "studio.visual", "studio.audio_engine"]
+[tool.setuptools.packages.find]
+include = ["studio*"]

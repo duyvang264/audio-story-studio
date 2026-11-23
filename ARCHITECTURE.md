@@ -7,7 +7,7 @@ Telegram ──HTTPS webhook──▶ n8n WF-00 (allowlist) ──X-API-Key─�
    │                                                       PostgreSQL (jobs, approvals, costs…)
    │                                                                       │ claim (SKIP LOCKED)
    └──── sendMessage / sendVideo ◀── Worker (studio.worker) ◀──────────────┘
-                                       │ say · ffmpeg · codex exec
+                                       │ TTS (say/piper/vieneu) · ffmpeg · codex exec
                                        ▼
                                    storage/ (local filesystem)
 ```
@@ -17,13 +17,15 @@ Telegram ──HTTPS webhook──▶ n8n WF-00 (allowlist) ──X-API-Key─�
 | # | Module | File | Vai trò |
 |---|---|---|---|
 | 1 | Telegram Controller | `commands.py`, `telegram.py`, `telegram_poll.py` | Lệnh, inline keyboard, allowlist, dedupe `update_id`, dry-run outbox. |
-| 2 | Story Manager | `story.py` (`import_story`, `create_episodes`) | Front matter YAML, chương `##`, bản quyền (`rights_status` + approval). |
+| 2 | Story Manager | `story.py` (`import_story`, `create_episodes`), `drive.py` | Front matter YAML, chương `##`, bản quyền (`rights_status` + approval). Nhập truyện read-only từ Google Drive (OAuth riêng với YouTube). |
 | 3 | Script Builder | `story.py` (`build_episode_script`) | Chuẩn hoá lời kể, section/paragraph/sentence, tag nhân vật/bối cảnh. |
-| 4 | TTS Engine | `audio.py`, `tts/base.py` | Chunk theo câu, cache `sha256(provider|model|voice|rate|text)`, ghép sample-exact, loudnorm −16 LUFS, `transcript_timeline.json`. |
+| 3a | Story Validation | `horror_story.py` | Beat kinh dị cấu hình được, kiểm tra continuity/độ dài → `story_quality_report.json`; FAIL thì dừng pipeline. |
+| 4 | TTS Engine | `audio.py`, `tts/base.py`, `tts/text.py`, `tts/vieneu_worker.py` | Provider `macos_say` / `piper` / `vieneu` (venv riêng, offline) / `tone`. Chunk theo câu, cache `sha256(provider|model|voice|rate|text)`, ghép sample-exact, `transcript_timeline.json`. `tts/text.py` chỉ sửa cách đọc, giữ nguyên text cho phụ đề. |
+| 4a | Audio Engine | `audio_engine/` | QC nguồn (`analyzer`), sửa lỗi có giới hạn (`repair`), thư viện âm thanh có checksum (`assets`), cue theo lời kể (`soundscape`), mix 5 stem có ducking (`mixing`), master EBU R128 hai lượt (`mastering`), gate gắn kết quả đo/nghe với hash file (`gate`). Điều phối ở `production.py`. Xem `docs/AUDIO_ENGINE.md`. |
 | 5 | Visual Story Engine | `visual/scene_planner.py`, `visual/prompts.py`, `visual/engine.py` | Scene plan (DP), prompt builder, hàng đợi tạo ảnh. |
 | 6 | Asset Manager | `visual/matcher.py`, `visual/engine.py` (`register_asset`) | Thư viện ảnh, tag, reuse, chống sai nhân vật/bối cảnh, retire ảnh bị từ chối. |
-| 7 | Timeline Composer | `timeline.py` | Frame-exact timing, phụ đề (≤2 dòng × 42 ký tự), BGM, transition. |
-| 8 | FFmpeg Engine | `render.py`, `media.py` | Clip từng cảnh (zoompan, oversample 2×), cache, xfade, mux audio + mov_text. |
+| 7 | Timeline Composer | `timeline.py`, `bgm.py` | Frame-exact timing, phụ đề (≤2 dòng × 42 ký tự), BGM (tự sinh, không bản quyền), transition. |
+| 8 | FFmpeg Engine | `render.py`, `media.py`, `subtitles.py` | Clip từng cảnh (zoompan, oversample 2×), cache, xfade, mux audio + mov_text. Phụ đề burn-in vẽ bằng Pillow (không cần libass). |
 | 9 | Quality Control | `qc.py` | Stream, độ phân giải, duration ±0.1 s, số frame, black frame, silence > 3 s, loudness −20…−12 LUFS, coverage, phụ đề. |
 | 10 | Publishing Manager | `pipeline.py` (`h_publish_queue`) | `publishing_records` (youtube + tiktok, chung 1 approval `publish`); không upload tự động. |
 | 10a | Uploaders | `uploaders.py` (`h_publish_upload`) | Chỉ sau approval `publish` + `PUBLISH_UPLOAD_ENABLED`: YouTube resumable upload (private mặc định) + caption; TikTok inbox (nháp). OAuth PKCE, token chmod 600. |
@@ -33,13 +35,17 @@ Telegram ──HTTPS webhook──▶ n8n WF-00 (allowlist) ──X-API-Key─�
 ## Pipeline & job types
 
 ```
-script_build → tts → visual_plan → visual_generate → timeline → render_preview → qc_preview → notify_preview
+script_build → story_validate → scene_sound_analysis → tts → tts_qc → audio_repair → narration_qc
+  → sound_assets → sound_timeline → audio_mix → audio_master → master_audio_qc
+  → visual_plan → visual_generate → timeline → render_preview → qc_preview → notify_preview
                                                                                            │ (approval: content)
                          render_final → qc_final → render_tiktok → qc_tiktok → publish_queue
                                                                                            │ (approval: publish)
                                                        publish_upload (mỗi nền tảng đã cấu hình; còn lại ready_manual)
 /regen_scene: visual_generate(regen) → timeline → render_preview(cache) → qc_preview → notify_preview
 ```
+
+Job ngoài chuỗi: `drive_import`, `story_generate` (bản nháp từ model local, vẫn cần duyệt rights/content), `publish_upload`. (`rerender_scene` có trong `ALL_JOB_TYPES` nhưng chưa có handler — `/regen_scene` đi qua `visual_generate`.) Danh sách stage gốc nằm ở `studio/jobs.py` (`STAGES`, `POST_APPROVAL_STAGES`), handler ở `studio/pipeline.py` (`HANDLERS`).
 
 - Idempotency key: `<stage>:<episode_id>:<run>`. Gọi lại cùng key trả về job cũ.
 - Retry: `max_attempts=3`, backoff 15 s · 30 s · 60 s. QC fail không retry (lỗi nội dung).
@@ -53,7 +59,8 @@ script_build → tts → visual_plan → visual_generate → timeline → render
 |---|---|---|
 | `rights` | Nhập truyện | Không thể `/create_episode` khi chưa duyệt. |
 | `cost` | Provider trả phí | `ALLOW_PAID_API=false` → bị chặn hẳn ở `budget.reserve`. |
-| `scene` | Nút ✅/🔁 từng cảnh | Duyệt hoặc tạo lại ảnh cảnh đó. |
+| `scene` | Nút ✅/🔁 từng cảnh | Duyệt hoặc tạo lại ảnh cảnh đó. Ảnh bị từ chối không bao giờ được tự gán lại cho cảnh đó (`scenes.rejected_asset_ids`). |
+| Nghe duyệt audio | Audio gate cần người nghe (`ListeningReviewRequired`) | Episode chuyển `needs_listening_review`; cần ghi `listening_review.json` (người duyệt + ghi chú) gắn với hash file. |
 | `content` | Sau preview 720p | Duyệt → render 1080p. |
 | `publish` | Sau QC 1080p | Duyệt → `ready_manual` (vì `ALLOW_AUTO_PUBLISH=false`). |
 
@@ -72,6 +79,11 @@ script_build → tts → visual_plan → visual_generate → timeline → render
 ## Database
 
 `migrations/001_init.sql`, `002_cost_purpose.sql`: stories, chapters, episodes, scripts, narration_chunks, scenes, visual_assets, asset_usage, jobs, job_events, approvals, provider_costs, publishing_records, telegram_state, telegram_updates — có FK, index, CHECK trạng thái.
+
+- `003_publish_upload.sql`: `publishing_records` thêm `external_url`, `last_error`, `published_at` và các trạng thái upload (`uploading`, `published`, `uploaded_draft`, `failed`).
+- `004_scene_rejected_assets.sql`: `scenes.rejected_asset_ids`.
+
+Migration chạy bằng `python -m studio.cli migrate`; file đã áp dụng được ghi trong bảng `schema_migrations`.
 
 ## Storage
 

@@ -16,3 +16,7 @@ n8n_data/
 
 # Story manuscripts (content, not source)
 document/
+
+# Build artifacts
+build/
+dist/

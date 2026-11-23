@@ -1,7 +1,7 @@
 """Offline repair auditions; ASR comparisons are advisory, not listening approval."""
 from pathlib import Path
 import os,json,subprocess,time
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 os.environ.update({'HF_HOME':str(ROOT/'storage/models/vieneu'),'XDG_CACHE_HOME':str(ROOT/'storage/tools/vieneu/cache'),'HF_HUB_OFFLINE':'1','HF_HUB_DISABLE_TELEMETRY':'1'})
 import numpy as np
 import soundfile as sf

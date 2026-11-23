@@ -16,7 +16,7 @@ import yaml
 from studio.drive import docx_text
 from studio.story import parse_story_file
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'document/Ngoi_Lang_Khong_Co_Nguoi_Chet_Tron_Bo_12_Tap.docx'
 REVISION = 'v4.1-production-draft-1'
 LABELS = {'MỞ TẬP — HOOK', 'NỘI DUNG TRUYỆN', 'KẾT TẬP — HOOK', 'KẾT TRUYỆN — DƯ ÂM'}

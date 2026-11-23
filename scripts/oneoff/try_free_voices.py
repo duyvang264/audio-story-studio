@@ -5,7 +5,7 @@ import os
 import subprocess
 import time
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 os.environ['HF_HOME'] = str(ROOT / 'storage/models/vieneu')
 os.environ['XDG_CACHE_HOME'] = str(ROOT / 'storage/tools/vieneu/cache')
 os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
